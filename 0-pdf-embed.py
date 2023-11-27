@@ -6,10 +6,22 @@ import re
 
 # import torch
 # from transformers import AutoTokenizer, AutoModel
+import ebooklib
+from ebooklib import epub
 from PyPDF2 import PdfReader
 from langchain.vectorstores import Chroma
+from langchain.vectorstores.utils import filter_complex_metadata
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.sentence_transformer import SentenceTransformerEmbeddings
+
+
+# List of files for verification
+processed_list_filename = "processed_list.txt"
+started_list_filename = "started_list.txt"
+
+# Download the required NLTK data
+import nltk
+nltk.download('averaged_perceptron_tagger')
 
 
 # def extract_metadata_from_pdf(pdf_path):
@@ -19,20 +31,48 @@ from langchain.embeddings.sentence_transformer import SentenceTransformerEmbeddi
 #     return cleaned_metadata
 
 
-def remove_surrogates(text):
+def remove_utf_surrogates(text):
     # Regex to match surrogate pairs
     surrogate_regex = re.compile(r"[\uD800-\uDFFF]")
     return surrogate_regex.sub("", text)
 
 
-def extract_from_pdf(pdf_path):
-    reader = PdfReader(pdf_path)
+def extract_from_epub(epub_file):
+    book = epub.read_epub(epub_file)
+    text = ""
+
+    for item in book.get_items():
+        if item.get_type() == ebooklib.ITEM_DOCUMENT:
+            page_text = item.get_body_content().decode("utf-8")
+            if page_text:
+                # Remove surrogate pairs
+                page_text = remove_utf_surrogates(page_text)
+
+                # Normalize text encoding to handle special characters
+                page_text = page_text.encode("utf-8", "replace").decode("utf-8") 
+                text += page_text + "\n"
+
+    metadata = {}
+    metadata["file_path"] = epub_file if epub_file else None
+    metadata["title"] = book.get_metadata("DC", "title")[0][0] if book.get_metadata("DC", "title") else None
+    metadata["author"] = book.get_metadata("DC", "creator")[0][0] if book.get_metadata("DC", "creator") else None
+    metadata["publisher"] = book.get_metadata("DC", "publisher")[0][0] if book.get_metadata("DC", "publisher") else None
+    metadata["date"] = book.get_metadata("DC", "date")[0][0] if book.get_metadata("DC", "date") else None
+    # metadata["description"] = book.get_metadata("DC", "description")[0][0] if book.get_metadata("DC", "description") else None
+    metadata["language"] = book.get_metadata("DC", "language")[0][0] if book.get_metadata("DC", "language") else None
+    metadata["rights"] = book.get_metadata("DC", "rights")[0][0] if book.get_metadata("DC", "rights") else None
+
+    log.info(f"Metadata: {metadata}")
+    return text, metadata
+
+def extract_from_file(pdf_file):
+    reader = PdfReader(pdf_file)
     text = ""
     for page in reader.pages:
         page_text = page.extract_text()
         if page_text:
             # Remove surrogate pairs
-            page_text = remove_surrogates(page_text)
+            page_text = remove_utf_surrogates(page_text)
 
             # Normalize text encoding to handle special characters
             page_text = page_text.encode("utf-8", "replace").decode("utf-8")
@@ -40,7 +80,7 @@ def extract_from_pdf(pdf_path):
 
     # Convert metadata to a regular dictionary and ensure all values are simple data types
     metadata = {}
-    metadata["file_path"] = pdf_path if pdf_path else None
+    metadata["file_path"] = pdf_file if pdf_file else None
     if reader.metadata is not None:
         for key, value in reader.metadata.items():
             key = key.lstrip("/")
@@ -50,14 +90,18 @@ def extract_from_pdf(pdf_path):
     return text, metadata
 
 
-def process_pdf(pdf_file):
-    all_docs = []
-    if pdf_file.endswith(".pdf"):
-        pdf_path = os.path.join(pdf_directory, pdf_file)
-        log.info(f"Processing {pdf_path}...")
+def process_file(input_file):
+    log.info(f"Started {input_file}...")
 
-        text, metadata = extract_from_pdf(pdf_path)
-        # metadata = extract_metadata_from_pdf(pdf_path)
+    # Add the file name to started_list_filename
+    with open(started_list_filename, "a") as file:
+        file.write(input_file + "\n")
+
+    all_docs = []
+    if input_file.endswith(".pdf"):
+        pdf_file = os.path.join(input_file_path, input_file)
+        text, metadata = extract_from_file(pdf_file)
+        # metadata = extract_metadata_from_pdf(pdf_file)
 
         docs = text_splitter.create_documents(
             texts=[text],
@@ -68,11 +112,38 @@ def process_pdf(pdf_file):
             all_docs.append(doc)
 
         if all_docs:
-            print(all_docs[0].page_content)
-            log.info(f"Finished with {pdf_path}.")
-            return all_docs
+            # print(all_docs[0].page_content)
+            # Add the file name to processed_list_filename
+            with open(processed_list_filename, "a") as file:
+                file.write(input_file + "\n")
+
+            log.info(f"Finished with {pdf_file}.")
+            return filter_complex_metadata(all_docs)
         else:
-            log.info(f"No documents found in {pdf_path}.")
+            log.info(f"No documents found in {pdf_file}.")
+            return None
+
+    elif input_file.endswith(".epub"):
+        epub_file = os.path.join(input_file_path, input_file)
+        text, metadata = extract_from_epub(epub_file)
+        docs = text_splitter.create_documents(
+            texts=[text],
+            metadatas=[metadata],
+        )        # add metadata
+
+        for doc in docs:
+            all_docs.append(doc)
+
+        if all_docs:
+            # print(all_docs[0].page_content)
+            # Add the file name to processed_list_filename
+            with open(processed_list_filename, "a") as file:
+                file.write(input_file + "\n")
+
+            log.info(f"Finished with {epub_file}.")
+            return filter_complex_metadata(all_docs)
+        else:
+            log.info(f"No documents found in {epub_file}.")
             return None
 
 
@@ -98,7 +169,7 @@ embedding_function = SentenceTransformerEmbeddings(
 
 
 # Directory containing PDF files
-pdf_directory = "../input"  # "../input-test"  # "."
+input_file_path = "../input"  # "../input-test"  # "."
 
 # Define the number of workers
 num_workers = 7
@@ -107,8 +178,8 @@ num_workers = 7
 all_docs = []
 with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
     future_to_pdf = {
-        executor.submit(process_pdf, pdf_file): pdf_file
-        for pdf_file in os.listdir(pdf_directory)
+        executor.submit(process_file, input_file): input_file
+        for input_file in os.listdir(input_file_path)
     }
 
     for future in concurrent.futures.as_completed(future_to_pdf):
@@ -119,7 +190,9 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
 
 
 log.info(f"Finished processing all PDFs. Got {len(all_docs)} documents.")
-
+if len(all_docs) == 0:
+    log.info("No documents found. Exiting...")
+    exit()
 
 # Initialize or create a new Chroma DB with all documents
 chroma = Chroma.from_documents(
