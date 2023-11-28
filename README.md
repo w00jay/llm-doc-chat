@@ -6,13 +6,14 @@ with a local document embeddings from your PDFs and EPUBs.
 
 ## Installation
 
-I have no requirements.txt.  Sorry...  I'm a bad person.
-Install a lot of dependencies...  But do this in a `virtualenv`
+Install a lot of dependencies in requirements.txt...  But do this in a `virtualenv`
 unless you want to be sorry later.
 
 My favorite way is to use direnv and use `layout python` in this folder,
 then `direnv allow` to provision your virtualenv that you don't have to
 `deactivate` later.
+
+Another plug for `pip install pipreqs` and `pipreqs ./`.
 
 
 ## Usage
