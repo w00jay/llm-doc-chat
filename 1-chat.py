@@ -7,11 +7,13 @@ from sentence_transformers import SentenceTransformer
 # pip install sentence-transformers
 
 
+# If using BERT-based LLM:
 # def generate_query_embedding(query, tokenizer, model):
     # inputs = tokenizer(query, return_tensors="pt", truncation=True, max_length=512, padding=True)
     # with torch.no_grad():
     #     outputs = model(**inputs)
     # return outputs.last_hidden_state.mean(dim=1).numpy()  # Convert to numpy array
+
 def generate_query_embedding(query, embedding_model):
     return embedding_model.encode([query])[0]
 
@@ -20,7 +22,7 @@ def find_relevant_document(db, query):
     results = db.similarity_search(query)
     return results
 
-# # Initialize tokenizer and model for generating query embeddings
+# # Initialize tokenizer and model for generating query embeddings w/ BERT
 # tokenizer = AutoTokenizer.from_pretrained("bert-large-uncased")
 # model = AutoModel.from_pretrained("bert-large-uncased")
 

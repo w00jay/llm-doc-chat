@@ -1,3 +1,7 @@
+# NOTE: This is for 'ingestion' of PDFs into Chroma. This is not for 'querying' Chroma.
+#       Use this script to ingest PDFs into Chroma, and then use 2-convo.py to query Chroma w/ UI,
+#       or use 1-chat.py to query Chroma from the command line, mostly for debugging.
+
 import os
 import json
 import logging
@@ -15,7 +19,12 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.sentence_transformer import SentenceTransformerEmbeddings
 
 
-# List of files for verification
+# List of files for verification artifacts, helpful for debugging when ingestion fails:
+#
+# cat started_list.txt| uniq | sort > started.txt
+# cat processed_list.txt| uniq | sort > processed.txt
+# diff started.txt processed.txt
+
 processed_list_filename = "processed_list.txt"
 started_list_filename = "started_list.txt"
 
@@ -101,7 +110,6 @@ def process_file(input_file):
     if input_file.endswith(".pdf"):
         pdf_file = os.path.join(input_file_path, input_file)
         text, metadata = extract_from_file(pdf_file)
-        # metadata = extract_metadata_from_pdf(pdf_file)
 
         docs = text_splitter.create_documents(
             texts=[text],
@@ -129,7 +137,7 @@ def process_file(input_file):
         docs = text_splitter.create_documents(
             texts=[text],
             metadatas=[metadata],
-        )        # add metadata
+        )
 
         for doc in docs:
             all_docs.append(doc)
@@ -146,6 +154,8 @@ def process_file(input_file):
             log.info(f"No documents found in {epub_file}.")
             return None
 
+
+## Begin processing PDFs
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -168,10 +178,13 @@ embedding_function = SentenceTransformerEmbeddings(
 )  # all-MiniLM-L6-v2
 
 
-# Directory containing PDF files
-input_file_path = "../input"  # "../input-test"  # "."
+# Directory containing PDF/epub files
+#
+# BTW, not all PDFs and EPUBs work w/ these readers...  I had 1 PDF and 3 EPUBs that didn't work so far
+# out of about 150+ files
+input_file_path = "../input"
 
-# Define the number of workers
+# Define the number of thread workers
 num_workers = 7
 
 # Process PDFs in parallel

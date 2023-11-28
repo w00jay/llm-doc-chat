@@ -1,3 +1,9 @@
+# Based on the ref code and vide:
+#
+# refs:
+# - https://github.com/alejandro-ao/ask-multiple-pdfs/tree/main
+# - https://www.youtube.com/watch?v=dXxQ0LR-3Hg
+
 import streamlit as st
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
@@ -20,8 +26,8 @@ from langchain.llms import HuggingFaceHub
 
 
 def get_conversation_chain(vectorstore):
-    llm = ChatOpenAI(model_name="gpt-4-1106-preview")
-    # llm = ChatOpenAI()  # 3.5-turbo
+    # llm = ChatOpenAI(model_name="gpt-4-1106-preview")
+    llm = ChatOpenAI()  # 3.5-turbo
     # llm = HuggingFaceHub(repo_id="google/flan-t5-xxl", model_kwargs={"temperature":0.5, "max_length":512})
 
     memory = ConversationBufferMemory(
@@ -53,7 +59,7 @@ def handle_userinput(user_question):
 
 def main():
     load_dotenv()
-    st.set_page_config(page_title="Chat with multiple PDFs",
+    st.set_page_config(page_title="Chat with your PDFs",
                        page_icon=":books:")
     st.write(css, unsafe_allow_html=True)
 
@@ -78,6 +84,7 @@ def main():
     if user_question:
         handle_userinput(user_question)
 
+    ## Not used from the reference
     # with st.sidebar:
     #     st.subheader("Your documents")
     #     pdf_docs = st.file_uploader(
